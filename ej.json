@@ -1,0 +1,10 @@
+{
+  "preprocessing":{
+    "categorical_features":["gender","job","city"],
+    "missing_values":"impute",
+    "impute_strategy":"mean",
+    "scaling":"standard",
+    "text_process":"tf_idf",
+    "sampling":"undersampling"
+  }
+}
