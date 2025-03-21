@@ -150,6 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--file', type=str, required=True, help="Ruta del archivo CSV")
     parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], required=True, help="Técnica de procesamiento de texto a utilizar")
     parser.add_argument('--output', type=str, required=True, help="Ruta del archivo CSV de salida")
+    parser.add_argument('--columna', type=str, required=True, help="Columna a tratar.")
     args = parser.parse_args()
 
     # Carga de datos
@@ -170,8 +171,8 @@ if __name__ == '__main__':
     data = simplify_text(data, text_feature)
     
     # Mostrar la columna de texto simplificada
-    print("Texto simplificado en la columna v2:")
-    print(data['v2'].head(10))  # Mostrar las primeras 10 filas de la columna v2 simplificada
+    print("Texto simplificado en la columna " + args.columna + ":")
+    print(data[args.columna].head(10))  # Mostrar las primeras 10 filas de la columna v2 simplificada
     
     # Procesar texto
     process_text(text_feature, args.text_process)
