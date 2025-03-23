@@ -498,7 +498,7 @@ def load_model():
         print(e)
         sys.exit(1)
 
-def predict():
+def predict(modelo,columna):
     """
     Realiza una predicción utilizando el modelo entrenado y guarda los resultados en un archivo CSV.
 
@@ -510,10 +510,12 @@ def predict():
     """
     global data
     # Predecimos
-    prediction = model.predict(data)
+    prediction = modelo.predict(data)
     
-    # Añadimos la prediccion al dataframe data
-    data = pd.concat([data, pd.DataFrame(prediction, columns=[args.prediction])], axis=1)
+    # Añadimos la prediccion al dataframe data:
+    data = pd.concat([data, pd.DataFrame(prediction, columns=[columna])], axis=1)
+    # Guardamos el dataframe con la predicción:
+    data.to_csv('output/data-prediction.csv',index=False)
 
 #    __  __       _       
 #   |  \/  | __ _(_)_ __  
@@ -568,7 +570,7 @@ if __name__ == '__main__':
 
     if args.mode=='train':
         # Entrenamos el modelo seleccionado:
-        print(f"Entrenando el modelo {args.model}")
+        print(f"Entrenando el modelo {args.model}...")
         if args.modelo=="knn":
             try:
                 knn()
@@ -591,4 +593,12 @@ if __name__ == '__main__':
             except Exception as e:
                 print(e)
     elif args.mode=='test':
-        print("\n- Cargando el modelo")
+        print(f"\n- Cargando el modelo {args.modelo}...")
+        modelo = load_model()
+        try:
+            predict(modelo,args.columna)
+            print(f"Test del modelo {args.modelo} realizado con éxito.")
+            sys.exit(0)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
