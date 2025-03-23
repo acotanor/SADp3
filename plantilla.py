@@ -1,8 +1,11 @@
 import pandas as pd
+import numpy as np
 import sys
+import os
 import argparse
 import pickle
 import json
+import csv
 # Sklearn
 from sklearn.calibration import LabelEncoder
 from sklearn.metrics import f1_score, confusion_matrix, classification_report
@@ -18,6 +21,9 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
+# Imblearn
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import RandomOverSampler
 
 #    ____                                    _             _        ____        _            
 #   |  _ \ _ __ ___   ___ ___  ___  __ _  __| | ___     __| | ___  |  _ \  __ _| |_ ___  ___ 
@@ -141,12 +147,18 @@ def select_features(data):
 
         # Numerical features
         numerical_feature = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        if args.column in numerical_feature:
+            numerical_feature.remove(args.column)
         
         # Categorical features
         categorical_feature = data.select_dtypes(include='object').columns.tolist()
+        if args.column in categorical_feature:
+            categorical_feature.remove(args.column)
         
         # Text features
         text_feature = [col for col in categorical_feature if col != 'v1']
+        if args.column in text_feature:
+            text_feature.remove(args.column)
         
         return numerical_feature, text_feature, categorical_feature
     except Exception as e:
@@ -184,7 +196,7 @@ def process_missing_values(data, numerical_feature, categorical_feature):
         print(e)
         sys.exit(1)
 
-def reescaler(data, numerical_feature):
+def reescaler(numerical_feature):
     """
     Rescala las características numéricas en el conjunto de datos utilizando diferentes métodos de escala.
 
@@ -198,6 +210,9 @@ def reescaler(data, numerical_feature):
         Exception: Si hay un error al reescalar los datos.
 
     """
+    scaler = MinMaxScaler(feature_range=(0,1))
+    return scaler.fit_transform(numerical_feature)
+
 
 def cat2num(data, categorical_feature):
     """
@@ -209,6 +224,12 @@ def cat2num(data, categorical_feature):
     Returns:
         categorical_feature: El dato de entrada convertido en valor numérico.
     """
+    le = LabelEncoder()
+    
+    for feature in categorical_feature:
+        data[feature] = le.fit_transform(data[feature])
+    
+    return data
 
 def simplify_text(data, text_feature):
     """
@@ -278,8 +299,7 @@ def process_text(text_feature, text_process):
 
 def over_under_sampling():
     """
-    Realiza oversampling o undersampling en los datos según la estrategia especificada en args.preprocessing["sampling"].
-    
+    Realiza oversampling o undersampling en los datos según la estrategia especificada en args.sampling
     Args:
         None
     
@@ -289,6 +309,7 @@ def over_under_sampling():
     Raises:
         Exception: Si ocurre algún error al realizar el oversampling o undersampling.
     """
+
 
 def drop_features():
     """
@@ -305,14 +326,15 @@ def preprocesar_datos(text_process):
     
     # Procesar valores faltantes
     data = process_missing_values(data, numerical_feature, categorical_feature)
-    
     # Simplificar texto
     data = simplify_text(data, text_feature)
-    
     # Procesar texto
     process_text(text_feature, text_process)
+    
 
-
+    # Convertir variables categóricas a numéricas
+    data = cat2num(data, categorical_feature)
+    print("Columnas del DataFrame después de categorizar:", data.columns)
 
 #    __  __           _      _           
 #   |  \/  | ___   __| | ___| | ___  ___ 
@@ -325,15 +347,20 @@ def divide_data():
     Función que divide los datos en conjuntos de entrenamiento y desarrollo.
 
     Parámetros:
-    - data: DataFrame que contiene los datos.
-    - args: Objeto que contiene los argumentos necesarios para la división de datos.
+    None
 
-    Retorna:
+    Returns:
     - x_train: DataFrame con las características de entrenamiento.
     - x_dev: DataFrame con las características de desarrollo.
     - y_train: Serie con las etiquetas de entrenamiento.
     - y_dev: Serie con las etiquetas de desarrollo.
     """
+    global data
+    x = data.iloc[:, :-1].values # Todas las columnas menos la última
+    y = data.iloc[:, -1].values # Última columna
+    
+    # Dividimos los datos en entrenamiento y test
+    return train_test_split(x, y, test_size=args.test)
 
 def save_model(gs):
     """
@@ -347,10 +374,10 @@ def save_model(gs):
 
     """
     try:
-        with open('output/modelo.pkl', 'wb') as file:
+        with open(f'output/{args.modelo}.pkl', 'wb') as file:
             pickle.dump(gs, file)
             print("Modelo guardado con éxito")
-        with open('output/modelo.csv', 'w') as file:
+        with open(f'output/{args.modelo}.csv', 'w') as file:
             writer = csv.writer(file)
             writer.writerow(['Params', 'Score'])
             for params, score in zip(gs.cv_results_['params'], gs.cv_results_['mean_test_score']):
@@ -381,9 +408,14 @@ def mostrar_resultados(gs, x_dev, y_dev):
     print("> Mejor puntuacion:\n", gs.best_score_)
     print("> F1-score micro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[0])
     print("> F1-score macro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[1])
-    print("> Informe de clasificación:\n", calculate_classification_report(y_dev, gs.predict(x_dev)))
-    print("> Matriz de confusión:\n", calculate_confusion_matrix(y_dev, gs.predict(x_dev)))
+    print("> Informe de clasificación:\n", classification_report(y_dev, gs.predict(x_dev)))
+    print("> Matriz de confusión:\n", confusion_matrix(y_dev, gs.predict(x_dev)))
 
+def calculate_fscore(y_true, y_pred):
+    """
+    Calcula el F1-score de un clasificador. 
+    """
+    return f1_score(y_true, y_pred, average='micro'), f1_score(y_true, y_pred, average='macro')
 
 def knn():
     """
@@ -397,26 +429,18 @@ def knn():
     """
     # Dividimos los datos en entrenamiento y dev
     x_train, x_dev, y_train, y_dev = divide_data()
+    x_train = reescaler(x_train)
+    x_dev = reescaler(x_dev)
     
     # Hacemos un barrido de hiperparametros
+    gs = GridSearchCV(KNeighborsClassifier(), {"n_neighbors": [1,2,3,4,5,6,7,8,9,10]}, n_jobs=args.cpu)
+    gs.fit(x_train, y_train)
 
-    with tqdm(total=100, desc='Procesando kNN', unit='iter', leave=True) as pbar:
-        gs = GridSearchCV(KNeighborsClassifier(), args.kNN, cv=5, n_jobs=args.cpu, scoring=args.estimator)
-        start_time = time.time()
-        gs.fit(x_train, y_train)
-        end_time = time.time()
-        for i in range(100):
-            time.sleep(random.uniform(0.06, 0.15))  # Esperamos un tiempo aleatorio
-            pbar.update(random.random()*2)  # Actualizamos la barra con un valor aleatorio
-        pbar.n = 100
-        pbar.last_print_n = 100
-        pbar.update(0)
-    execution_time = end_time - start_time
-    print("Tiempo de ejecución:"+Fore.MAGENTA, execution_time,Fore.RESET+ "segundos")
-    
     # Mostramos los resultados
     mostrar_resultados(gs, x_dev, y_dev)
     
+    """knn = KNeighborsClassifier(n_neighbors=8)
+    y_pred = knn.predict(x_dev)"""
     # Guardamos el modelo utilizando pickle
     save_model(gs)
 
@@ -489,16 +513,16 @@ def load_model():
         Exception: Si ocurre un error al cargar el modelo.
     """
     try:
-        with open('output/modelo.pkl', 'rb') as file:
+        with open(f'output/{args.modelo}.pkl', 'rb') as file:
             model = pickle.load(file)
-            print(Fore.GREEN+"Modelo cargado con éxito"+Fore.RESET)
+            print("Modelo cargado con éxito")
             return model
     except Exception as e:
-        print(Fore.RED+"Error al cargar el modelo"+Fore.RESET)
+        print("Error al cargar el modelo")
         print(e)
         sys.exit(1)
 
-def predict(modelo,columna):
+def predict(modelo):
     """
     Realiza una predicción utilizando el modelo entrenado y guarda los resultados en un archivo CSV.
 
@@ -513,7 +537,7 @@ def predict(modelo,columna):
     prediction = modelo.predict(data)
     
     # Añadimos la prediccion al dataframe data:
-    data = pd.concat([data, pd.DataFrame(prediction, columns=[columna])], axis=1)
+    data = pd.concat([data, pd.DataFrame(prediction, columns=[args.column])], axis=1)
     # Guardamos el dataframe con la predicción:
     data.to_csv('output/data-prediction.csv',index=False)
 
@@ -526,16 +550,19 @@ def predict(modelo,columna):
 if __name__ == '__main__':
     # Procesamiento de los argumentos de entrada
     parser = argparse.ArgumentParser(description="Procesamiento de datos")
-    parser.add_argument('-d','--data', type=str, required=True, help="Ruta del archivo CSV", required=True)
+    parser.add_argument('-d','--data', type=str, help="Ruta del archivo CSV", required=True)
     parser.add_argument('-m','--mode', type=str, choices=['train','test'], help="Modo de ejecución (train/test)", required=True)
     parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar", required=True)
     parser.add_argument('-s','--sampling', type=str, choices=['over','under'], help="Realizar over o under sampling a los datos en los que sea necesario.", required=True)
     parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida", required=True)
     parser.add_argument('-c','--column', type=str, help="Columna a predecir.")
-    parser.add_argument('--modelo',type=str, choices=["knn","dt","rf"], help="Modelo a entrenar/probar. (knn=KNN, dt=Decision Tree, rf=Random Forest)")
-    parse.add_argument("-c", "--cpu", help="Número de CPUs a utilizar [-1 para usar todos]", default=-1, type=int)
+    parser.add_argument('--modelo', type=str, choices=["knn","dt","rf"], help="Modelo a entrenar/probar. (knn=KNN, dt=Decision Tree, rf=Random Forest)")
+    parser.add_argument("--cpu", help="Número de CPUs a utilizar (-1 para usar todos)", default=-1, type=int)
+    parser.add_argument("--test", type=float, default=0.25,help="La proporción datos de entrenamiento / datos de test.")
 
     args = parser.parse_args()
+
+    np.random.seed(1)  # Utilizamos una semilla para poder reproducir los resultados.
 
     # Creamos la carpeta output:
     print("\n- Creando carpeta output...")
@@ -562,6 +589,8 @@ if __name__ == '__main__':
     nltk.download('stopwords')
     nltk.download('wordnet')
 
+    nltk.download('punkt_tab')
+
     # Preprocesar datos:
     preprocesar_datos(args.text_process)
         
@@ -571,7 +600,7 @@ if __name__ == '__main__':
 
     if args.mode=='train':
         # Entrenamos el modelo seleccionado:
-        print(f"Entrenando el modelo {args.model}...")
+        print(f"Entrenando el modelo {args.modelo}...")
         if args.modelo=="knn":
             try:
                 knn()
@@ -597,7 +626,7 @@ if __name__ == '__main__':
         print(f"\n- Cargando el modelo {args.modelo}...")
         modelo = load_model()
         try:
-            predict(modelo,args.columna)
+            predict(modelo)
             print(f"Test del modelo {args.modelo} realizado con éxito.")
             sys.exit(0)
         except Exception as e:
