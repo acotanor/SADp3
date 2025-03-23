@@ -18,15 +18,89 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
-# Descargar recursos necesarios de NLTK
-nltk.download('punkt')
-nltk.download('stopwords')
 
 #    ____                                    _             _        ____        _            
 #   |  _ \ _ __ ___   ___ ___  ___  __ _  __| | ___     __| | ___  |  _ \  __ _| |_ ___  ___ 
 #   | |_) | '__/ _ \ / __/ _ \/ __|/ _` |/ _` |/ _ \   / _` |/ _ \ | | | |/ _` | __/ _ \/ __|
 #   |  __/| | | (_) | (_|  __/\__ \ (_| | (_| | (_) | | (_| |  __/ | |_| | (_| | || (_) \__ \
 #   |_|   |_|  \___/ \___\___||___/\__,_|\__,_|\___/   \__,_|\___| |____/ \__,_|\__\___/|___/
+
+def generarJson(filename="config.json"):
+    """
+    Comprueba si existe un archivo de configuración, de no haberlo crea uno por defecto.
+
+    Args:
+        filename: El nombre del archivo, siempre usamos el mismo por lo que tiene un valor default.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
+    if not os.path.exists(filename):
+        print(f"Generando un archivo de configuración: {filename}")
+        
+        config = {
+            "preprocessing": {
+                "categorical_features": ["A", "B", "C"],
+                "missing_values": "D",
+                "impute_strategy": "mean",
+                "scaling": "standard",
+                "text_process": "tf_idf",
+                "sampling": "undersampling"
+            }
+        }
+
+        with open(filename, "w") as jsonFile:
+            json.dump(config, jsonFile, indent=4)
+        
+        print(f"Archivo de configuración {filename} creado correctamente.")
+    else:
+        return
+
+def leerJson(file) -> dict:
+    """
+    Dado un archivo JSON devuelve un diccionario con sus metadatos.
+
+    Args:
+        file: El archivo .json
+    
+    Returns:
+        dict: Un diccionario con los metadatos del archivo .json
+    
+    Raises:
+        FileNotFoundError:  No existe el archivo .json especificado, devuelve un diccionario vacío.
+        JSONDecodeError:    El formato del archivo .json es incorrecto y no se puede decodificar, devuelve un diccionario vacío.
+        Exception:          Ha habido un error inesperado, devuelve un diccionario vacío. 
+    """
+    try:
+        with open(file,"r") as jsonFile:        # Abre el archivo.
+            return json.load(jsonFile)          # Carga los datos en un diccionario.
+    except FileNotFoundError:
+        print(f"El archivo {file} no existe.")
+        return {}                               # Diccionario vacío.
+    except json.JSONDecodeError:
+        print("Formato incorrecto.")
+        return {}
+    except Exception as e:
+        print(f"Error: {e}")
+        return {}
+
+# Dado un archivo JSON, el atributo a cambiar y el valor modificado, modifica los metadatos.
+def modJson(file, atributo, valor):
+    try:
+        data = leerJSON.leerJson(file)              # Lee el archivo JSON a modificar.
+        data["preprocessing"][atributo] = valor     # Cambiamos el valor de un atributo.
+
+        with open(file, "w") as jsonFile:        
+            json.dump(data, jsonFile, indent=4)     # Aplicamos los cambios en el archivo.
+    except FileNotFoundError:
+        print(f"El archivo {file} no existe.")
+    except json.JSONDecodeError:
+        print("Formato incorrecto.")
+    except Exception as e:
+        print(f"Error: {e}")
 
 def load_data(file, encoding='utf-8'):
     # Carga de datos
@@ -418,17 +492,27 @@ def predict():
 #   |_|  |_|\__,_|_|_| |_|
                     
 if __name__ == '__main__':
-    # Configurar argumentos
+    # Procesamiento de los argumentos de entrada
     parser = argparse.ArgumentParser(description="Procesamiento de datos")
-    parser.add_argument('--file', type=str, required=True, help="Ruta del archivo CSV")
-    parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], required=True, help="Técnica de procesamiento de texto a utilizar")
-    parser.add_argument('--output', type=str, required=True, help="Ruta del archivo CSV de salida")
-    parser.add_argument('--columna', type=str, required=True, help="Columna a tratar.")
+    parser.add_argument('-d','--data', type=str, required=True, help="Ruta del archivo CSV")
+    parser.add_argument('-m','--mode', type=str, choices=['train','test'], help="Modo de ejecución (train/test)", required=True)
+    parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar")
+    parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida")
+    parser.add_argument('-c','--column', type=str, help="Columna a tratar/predecir.")
+    parse.add_argument("-c", "--cpu", help="Número de CPUs a utilizar [-1 para usar todos]", required=False, default=-1, type=int)
+
     args = parser.parse_args()
 
     # Carga de datos
-    data = load_data(args.file)
-    
+    print(f"\n- Cargando datos desde {args.data}...")
+    data = load_data(args.data)
+
+    # Descargamos recursos necesarios de NLTK
+    print("\n- Descargando diccionarios...")
+    nltk.download('punkt')
+    nltk.download('stopwords')
+    nltk.download('wordnet')
+
     # Seleccionar características
     numerical_feature, text_feature, categorical_feature = select_features(data)
     
@@ -453,3 +537,4 @@ if __name__ == '__main__':
     # Guardar datos procesados en un nuevo archivo CSV
     data.to_csv(args.output, index=False)
     print(f"Datos procesados guardados en {args.output}")
+
