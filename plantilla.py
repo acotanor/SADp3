@@ -9,7 +9,7 @@ import csv
 # Sklearn
 from sklearn.calibration import LabelEncoder
 from sklearn.metrics import f1_score, confusion_matrix, classification_report
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, Normalizer, StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.neighbors import KNeighborsClassifier
@@ -124,13 +124,29 @@ def modJson(file, atributo, valor):
         print(f"Error: {e}")
 
 def load_data(file, encoding='utf-8'):
-    # Carga de datos
+    """
+    Carga los datos desde un archivo CSV y elimina columnas innecesarias.
+
+    Args:
+        file (str): Ruta del archivo CSV.
+        encoding (str): Codificación del archivo (por defecto 'utf-8').
+
+    Returns:
+        pd.DataFrame: DataFrame con los datos cargados y limpiados.
+    """
     try:
+        # Cargar el archivo CSV
         data = pd.read_csv(file, encoding=encoding)
+        
+        # Eliminar columnas innecesarias
+        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+        
+        return data
     except UnicodeDecodeError:
         print(f"Error al decodificar el archivo con la codificación {encoding}. Intentando con 'latin1'.")
         data = pd.read_csv(file, encoding='latin1')
-    return data
+        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+        return data
 
 def select_features(data):
     """
@@ -147,19 +163,19 @@ def select_features(data):
 
         # Numerical features
         numerical_feature = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
-        if args.column in numerical_feature:
-            numerical_feature.remove(args.column)
         
         # Categorical features
         categorical_feature = data.select_dtypes(include='object').columns.tolist()
-        if args.column in categorical_feature:
-            categorical_feature.remove(args.column)
         
-        # Text features
-        text_feature = [col for col in categorical_feature if col != 'v1']
-        if args.column in text_feature:
-            text_feature.remove(args.column)
+        # Text features: Detectar columnas con texto largo (por ejemplo, más de 30 caracteres en promedio)
+        text_feature = [col for col in categorical_feature if data[col].str.len().mean() > 30]
         
+        # Excluir columnas de texto de las categóricas
+        categorical_feature = [col for col in categorical_feature if col not in text_feature]
+
+        print("Características numéricas identificadas:", numerical_feature)
+        print("Características categóricas identificadas:", categorical_feature)
+        print("Características de texto identificadas:", text_feature)
         return numerical_feature, text_feature, categorical_feature
     except Exception as e:
         print("Error al separar los datos")
@@ -201,18 +217,21 @@ def reescaler(numerical_feature):
     Rescala las características numéricas en el conjunto de datos utilizando diferentes métodos de escala.
 
     Args:
-        numerical_feature (DataFrame): El dataframe que contiene las características numéricas.
+        numerical_feature (array-like): El array que contiene las características numéricas.
 
     Returns:
         numerical_feature: El dato de entrada reescalado.
 
     Raises:
         Exception: Si hay un error al reescalar los datos.
-
     """
-    scaler = MinMaxScaler(feature_range=(0,1))
-    return scaler.fit_transform(numerical_feature)
+    # Verificar si el array está vacío
+    if numerical_feature.size == 0:  # Cambiado de .empty a .size
+        print("No se encontraron características numéricas para reescalar.")
+        return numerical_feature
 
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    return scaler.fit_transform(numerical_feature)
 
 def cat2num(data, categorical_feature):
     """
@@ -264,36 +283,34 @@ def process_text(text_feature, text_process):
     """
     Procesa las características de texto utilizando técnicas de vectorización como TF-IDF o BOW.
 
-    Parámetros:
-    text_feature (list): Una lista que contiene los nombres de las características de texto a procesar.
-    text_process (str): Técnica de procesamiento de texto a utilizar ("tf-idf" o "bow").
-
+    Args:
+        text_feature (list): Lista de nombres de las columnas de texto.
+        text_process (str): Técnica de procesamiento de texto a utilizar ("tf-idf" o "bow").
     """
     global data
     try:
         if len(text_feature) > 0:
-            if text_process == "tf-idf":               
-                tfidf_vectorizer = TfidfVectorizer()
-                text_data = data[text_feature].apply(lambda x: ' '.join(x.astype(str)), axis=1)
-                tfidf_matrix = tfidf_vectorizer.fit_transform(text_data)
-                text_features_df = pd.DataFrame(tfidf_matrix.toarray(), columns=tfidf_vectorizer.get_feature_names_out())
-                data = pd.concat([data, text_features_df], axis=1)
-                data.drop(columns=text_feature, inplace=True)
-                print("Texto tratado con éxito usando TF-IDF")
-            elif text_process == "bow":
-                bow_vectorizer = CountVectorizer()
-                text_data = data[text_feature].apply(lambda x: ' '.join(x.astype(str)), axis=1)
-                bow_matrix = bow_vectorizer.fit_transform(text_data)
-                text_features_df = pd.DataFrame(bow_matrix.toarray(), columns=bow_vectorizer.get_feature_names_out())
-                data = pd.concat([data, text_features_df], axis=1)
-                data.drop(columns=text_feature, inplace=True)
-                print("Texto tratado con éxito usando BOW")
-            else:
-                print("No se están tratando los textos")
+            for feature in text_feature:
+                if text_process == "tf-idf":
+                    tfidf_vectorizer = TfidfVectorizer()
+                    tfidf_matrix = tfidf_vectorizer.fit_transform(data[feature])
+                    tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=tfidf_vectorizer.get_feature_names_out())
+                    data = pd.concat([data.reset_index(drop=True), tfidf_df.reset_index(drop=True)], axis=1)
+                    data.drop(columns=[feature], inplace=True)
+                    print(f"Texto de la columna '{feature}' procesado con éxito usando TF-IDF")
+                elif text_process == "bow":
+                    bow_vectorizer = CountVectorizer()
+                    bow_matrix = bow_vectorizer.fit_transform(data[feature])
+                    bow_df = pd.DataFrame(bow_matrix.toarray(), columns=bow_vectorizer.get_feature_names_out())
+                    data = pd.concat([data.reset_index(drop=True), bow_df.reset_index(drop=True)], axis=1)
+                    data.drop(columns=[feature], inplace=True)
+                    print(f"Texto de la columna '{feature}' procesado con éxito usando Bag of Words")
+                else:
+                    print(f"No se está procesando el texto de la columna '{feature}'")
         else:
             print("No se han encontrado columnas de texto a procesar")
     except Exception as e:
-        print("Error al tratar el texto")
+        print("Error al procesar el texto")
         print(e)
         sys.exit(1)
 
@@ -326,14 +343,27 @@ def preprocesar_datos(text_process):
     
     # Procesar valores faltantes
     data = process_missing_values(data, numerical_feature, categorical_feature)
-    # Simplificar texto
-    data = simplify_text(data, text_feature)
-    # Procesar texto
-    process_text(text_feature, text_process)
     
-
     # Convertir variables categóricas a numéricas
     data = cat2num(data, categorical_feature)
+    
+    # Simplificar texto
+    if text_feature:
+        data = simplify_text(data, text_feature)
+    
+    # Procesar texto
+    if text_feature:
+        process_text(text_feature, text_process)
+    
+    # Reescalar características numéricas
+    if numerical_feature:
+        print("Reescalando características numéricas...")
+        data[numerical_feature] = reescaler(data[numerical_feature])
+    else:
+        print("No se encontraron características numéricas para reescalar.")
+    
+    print("Tipos de datos en el DataFrame:")
+    print(data.dtypes)
     print("Columnas del DataFrame después de categorizar:", data.columns)
 
 #    __  __           _      _           
@@ -342,25 +372,29 @@ def preprocesar_datos(text_process):
 #   | |  | | (_) | (_| |  __/ | (_) \__ \
 #   |_|  |_|\___/ \__,_|\___|_|\___/|___/
 
+from sklearn.preprocessing import LabelEncoder
+
 def divide_data():
     """
-    Función que divide los datos en conjuntos de entrenamiento y desarrollo.
-
-    Parámetros:
-    None
-
-    Returns:
-    - x_train: DataFrame con las características de entrenamiento.
-    - x_dev: DataFrame con las características de desarrollo.
-    - y_train: Serie con las etiquetas de entrenamiento.
-    - y_dev: Serie con las etiquetas de desarrollo.
+    Divide los datos en conjuntos de entrenamiento y desarrollo.
+    Codifica las etiquetas (y) como valores numéricos.
     """
     global data
-    x = data.iloc[:, :-1].values # Todas las columnas menos la última
-    y = data.iloc[:, -1].values # Última columna
-    
-    # Dividimos los datos en entrenamiento y test
-    return train_test_split(x, y, test_size=args.test)
+    X = data.drop(columns=[args.column])  # Eliminar la columna objetivo
+    y = data[args.column]  # Columna objetivo
+
+    # Codificar las etiquetas
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y)
+
+    # Dividir los datos en entrenamiento y desarrollo
+    x_train, x_dev, y_train, y_dev = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Convertir X a arrays de NumPy para evitar problemas con nombres de columnas
+    x_train = x_train.values
+    x_dev = x_dev.values
+
+    return x_train, x_dev, y_train, y_dev
 
 def save_model(gs):
     """
@@ -420,86 +454,90 @@ def calculate_fscore(y_true, y_pred):
 def knn():
     """
     Función para implementar el algoritmo kNN.
-    Hace un barrido de hiperparametros para encontrar los parametros optimos
-
-    :param data: Conjunto de datos para realizar la clasificación.
-    :type data: pandas.DataFrame
-    :return: Tupla con la clasificación de los datos.
-    :rtype: tuple
+    Hace un barrido de hiperparámetros para encontrar los parámetros óptimos.
     """
-    # Dividimos los datos en entrenamiento y dev
+    # Dividimos los datos en entrenamiento y desarrollo
     x_train, x_dev, y_train, y_dev = divide_data()
+
+    # Reescalamos los datos
     x_train = reescaler(x_train)
     x_dev = reescaler(x_dev)
     
-    # Hacemos un barrido de hiperparametros
-    gs = GridSearchCV(KNeighborsClassifier(), {"n_neighbors": [1,2,3,4,5,6,7,8,9,10]}, n_jobs=args.cpu)
+    # Configuramos el barrido de hiperparámetros
+    param_grid = {"n_neighbors": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+    gs = GridSearchCV(KNeighborsClassifier(), param_grid, n_jobs=args.cpu)
+
+    # Entrenamos el modelo
     gs.fit(x_train, y_train)
 
     # Mostramos los resultados
     mostrar_resultados(gs, x_dev, y_dev)
     
-    """knn = KNeighborsClassifier(n_neighbors=8)
-    y_pred = knn.predict(x_dev)"""
     # Guardamos el modelo utilizando pickle
     save_model(gs)
-
 
 def decision_tree():
     """
     Función para implementar el algoritmo de árbol de decisión.
-
-    :param data: Conjunto de datos para realizar la clasificación.
-    :type data: pandas.DataFrame
-    :return: Tupla con la clasificación de los datos.
-    :rtype: tuple
+    Realiza un barrido de hiperparámetros para encontrar los mejores parámetros.
     """
-    # Dividimos los datos en entrenamiento y dev
+    # Dividimos los datos en entrenamiento y desarrollo
     x_train, x_dev, y_train, y_dev = divide_data()
-    
-    # Hacemos un barrido de hiperparametros
-    with tqdm(total=100, desc='Procesando decision tree', unit='iter', leave=True) as pbar:
-        #TODO Llamar al decision trees
-        #gs = GridSearchCV(
 
-        execution_time = end_time - start_time
-    print("Tiempo de ejecución:"  + execution_time + "segundos")
-    
+    # Configuramos el barrido de hiperparámetros
+    param_grid = {
+        "criterion": ["gini", "entropy"],  # Función para medir la calidad de la división
+        "max_depth": [None, 5, 10, 15, 20],  # Profundidad máxima del árbol
+        "min_samples_split": [2, 5, 10],  # Mínimo número de muestras para dividir un nodo
+        "min_samples_leaf": [1, 2, 4]  # Mínimo número de muestras en una hoja
+    }
+
+    # Configuramos GridSearchCV
+    gs = GridSearchCV(DecisionTreeClassifier(random_state=42), param_grid, n_jobs=args.cpu, cv=5)
+
+    # Entrenamos el modelo
+    print("Entrenando el modelo Decision Tree...")
+    gs.fit(x_train, y_train)
+
     # Mostramos los resultados
     mostrar_resultados(gs, x_dev, y_dev)
-    
+
     # Guardamos el modelo utilizando pickle
     save_model(gs)
 
-
 def random_forest():
     """
-    Función que entrena un modelo de Random Forest utilizando GridSearchCV para encontrar los mejores hiperparámetros.
-    Divide los datos en entrenamiento y desarrollo, realiza la búsqueda de hiperparámetros, guarda el modelo entrenado
-    utilizando pickle y muestra los resultados utilizando los datos de desarrollo.
-
-    Parámetros:
-        Ninguno
-
-    Retorna:
-        Ninguno
+    Función para implementar el algoritmo Random Forest.
+    Realiza un barrido de hiperparámetros utilizando GridSearchCV para encontrar los mejores parámetros.
     """
-    
-    # Dividimos los datos en entrenamiento y dev
+    # Dividimos los datos en entrenamiento y desarrollo
     x_train, x_dev, y_train, y_dev = divide_data()
-    
-    # Hacemos un barrido de hiperparametros
-    with tqdm(total=100, desc='Procesando random forest', unit='iter', leave=True) as pbar:
-        #TODO Llamar al decision trees
-        #gs = GridSearchCV(
-        execution_time = end_time - start_time
-    
-    print("Tiempo de ejecución:"+Fore.MAGENTA, execution_time,Fore.RESET+ "segundos")
-    
-    # Mostramos los resultados
+
+    # Definir el espacio de búsqueda de hiperparámetros
+    param_grid = {
+        "n_estimators": [10, 50, 100],  # Número de árboles en el bosque
+        "max_depth": [None, 10, 20],  # Profundidad máxima del árbol
+        "min_samples_split": [2, 5],  # Mínimo número de muestras para dividir un nodo
+        "min_samples_leaf": [1, 2],  # Mínimo número de muestras en una hoja
+        "bootstrap": [True, False]  # Si se utiliza muestreo con reemplazo
+    }
+
+    # Configurar GridSearchCV
+    gs = GridSearchCV(
+        estimator=RandomForestClassifier(random_state=42),
+        param_grid=param_grid,
+        cv=5,  # Validación cruzada con 5 particiones
+        n_jobs=args.cpu,  # Número de CPUs a utilizar
+        verbose=2  # Nivel de detalle en la salida
+    )
+
+    print("Entrenando el modelo Random Forest con GridSearchCV...")
+    gs.fit(x_train, y_train)
+
+    # Mostrar los resultados
     mostrar_resultados(gs, x_dev, y_dev)
-    
-    # Guardamos el modelo utilizando pickle
+
+    # Guardar el modelo utilizando pickle
     save_model(gs)
 
 def load_model():
@@ -507,6 +545,7 @@ def load_model():
     Carga el modelo desde el archivo 'output/modelo.pkl' y lo devuelve.
 
     Returns:
+
         model: El modelo cargado desde el archivo 'output/modelo.pkl'.
 
     Raises:
@@ -527,19 +566,27 @@ def predict(modelo):
     Realiza una predicción utilizando el modelo entrenado y guarda los resultados en un archivo CSV.
 
     Parámetros:
-        Ninguno
+        modelo: El modelo entrenado.
 
     Retorna:
         Ninguno
     """
     global data
-    # Predecimos
-    prediction = modelo.predict(data)
-    
-    # Añadimos la prediccion al dataframe data:
-    data = pd.concat([data, pd.DataFrame(prediction, columns=[args.column])], axis=1)
-    # Guardamos el dataframe con la predicción:
-    data.to_csv('output/data-prediction.csv',index=False)
+    # Eliminar la columna objetivo del conjunto de características
+    X = data.drop(columns=[args.column])
+
+    # Convertir X a un array de NumPy para evitar inconsistencias
+    X = X.values
+
+    # Realizar predicciones
+    prediction = modelo.predict(X)
+
+    # Añadir las predicciones al DataFrame
+    data['Predicción'] = prediction
+
+    # Guardar el DataFrame con las predicciones
+    data.to_csv('output/data-prediction.csv', index=False)
+    print("Predicciones guardadas en 'output/data-prediction.csv'")
 
 #    __  __       _       
 #   |  \/  | __ _(_)_ __  
@@ -632,3 +679,5 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             sys.exit(1)
+
+
