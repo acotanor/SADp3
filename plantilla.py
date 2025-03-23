@@ -1,15 +1,32 @@
 import pandas as pd
 import sys
-import nltk
 import argparse
+import pickle
+import json
+# Sklearn
+from sklearn.calibration import LabelEncoder
+from sklearn.metrics import f1_score, confusion_matrix, classification_report
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, Normalizer, StandardScaler
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+#NLTK
+import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-
 # Descargar recursos necesarios de NLTK
 nltk.download('punkt')
 nltk.download('stopwords')
+
+#    ____                                    _             _        ____        _            
+#   |  _ \ _ __ ___   ___ ___  ___  __ _  __| | ___     __| | ___  |  _ \  __ _| |_ ___  ___ 
+#   | |_) | '__/ _ \ / __/ _ \/ __|/ _` |/ _` |/ _ \   / _` |/ _ \ | | | |/ _` | __/ _ \/ __|
+#   |  __/| | | (_) | (_|  __/\__ \ (_| | (_| | (_) | | (_| |  __/ | |_| | (_| | || (_) \__ \
+#   |_|   |_|  \___/ \___\___||___/\__,_|\__,_|\___/   \__,_|\___| |____/ \__,_|\__\___/|___/
 
 def load_data(file, encoding='utf-8'):
     # Carga de datos
@@ -78,6 +95,32 @@ def process_missing_values(data, numerical_feature, categorical_feature):
         print(e)
         sys.exit(1)
 
+def reescaler(data, numerical_feature):
+    """
+    Rescala las características numéricas en el conjunto de datos utilizando diferentes métodos de escala.
+
+    Args:
+        numerical_feature (DataFrame): El dataframe que contiene las características numéricas.
+
+    Returns:
+        numerical_feature: El dato de entrada reescalado.
+
+    Raises:
+        Exception: Si hay un error al reescalar los datos.
+
+    """
+
+def cat2num(data, categorical_feature):
+    """
+    Convierte las características categóricas en características numéricas utilizando la codificación de etiquetas.
+
+    Args:
+        categorical_feature (DataFrame): El DataFrame que contiene las características categóricas a convertir.
+
+    Returns:
+        categorical_feature: El dato de entrada convertido en valor numérico.
+    """
+
 def simplify_text(data, text_feature):
     """
     Función que simplifica el texto de una columna dada en un DataFrame. lower, stemmer, tokenizer, stopwords del NLTK....
@@ -144,6 +187,236 @@ def process_text(text_feature, text_process):
         print(e)
         sys.exit(1)
 
+def over_under_sampling():
+    """
+    Realiza oversampling o undersampling en los datos según la estrategia especificada en args.preprocessing["sampling"].
+    
+    Args:
+        None
+    
+    Returns:
+        None
+    
+    Raises:
+        Exception: Si ocurre algún error al realizar el oversampling o undersampling.
+    """
+
+def drop_features():
+    """
+    Elimina las columnas especificadas del conjunto de datos.
+
+    Parámetros:
+    features (list): Lista de nombres de columnas a eliminar.
+
+    """
+
+#    __  __           _      _           
+#   |  \/  | ___   __| | ___| | ___  ___ 
+#   | |\/| |/ _ \ / _` |/ _ \ |/ _ \/ __|
+#   | |  | | (_) | (_| |  __/ | (_) \__ \
+#   |_|  |_|\___/ \__,_|\___|_|\___/|___/
+
+def divide_data():
+    """
+    Función que divide los datos en conjuntos de entrenamiento y desarrollo.
+
+    Parámetros:
+    - data: DataFrame que contiene los datos.
+    - args: Objeto que contiene los argumentos necesarios para la división de datos.
+
+    Retorna:
+    - x_train: DataFrame con las características de entrenamiento.
+    - x_dev: DataFrame con las características de desarrollo.
+    - y_train: Serie con las etiquetas de entrenamiento.
+    - y_dev: Serie con las etiquetas de desarrollo.
+    """
+
+def save_model(gs):
+    """
+    Guarda el modelo y los resultados de la búsqueda de hiperparámetros en archivos.
+
+    Parámetros:
+    - gs: objeto GridSearchCV, el cual contiene el modelo y los resultados de la búsqueda de hiperparámetros.
+
+    Excepciones:
+    - Exception: Si ocurre algún error al guardar el modelo.
+
+    """
+    try:
+        with open('output/modelo.pkl', 'wb') as file:
+            pickle.dump(gs, file)
+            print("Modelo guardado con éxito")
+        with open('output/modelo.csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Params', 'Score'])
+            for params, score in zip(gs.cv_results_['params'], gs.cv_results_['mean_test_score']):
+                writer.writerow([params, score])
+    except Exception as e:
+        print("Error al guardar el modelo")
+        print(e)
+
+def mostrar_resultados(gs, x_dev, y_dev):
+    """
+    Muestra los resultados del clasificador.
+
+    Parámetros:
+    - gs: objeto GridSearchCV, el clasificador con la búsqueda de hiperparámetros.
+    - x_dev: array-like, las características del conjunto de desarrollo.
+    - y_dev: array-like, las etiquetas del conjunto de desarrollo.
+
+    Imprime en la consola los siguientes resultados:
+    - Mejores parámetros encontrados por la búsqueda de hiperparámetros.
+    - Mejor puntuación obtenida por el clasificador.
+    - F1-score micro del clasificador en el conjunto de desarrollo.
+    - F1-score macro del clasificador en el conjunto de desarrollo.
+    - Informe de clasificación del clasificador en el conjunto de desarrollo.
+    - Matriz de confusión del clasificador en el conjunto de desarrollo.
+    """
+
+    print("> Mejores parametros:\n", gs.best_params_)
+    print("> Mejor puntuacion:\n", gs.best_score_)
+    print("> F1-score micro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[0])
+    print("> F1-score macro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[1])
+    print("> Informe de clasificación:\n", calculate_classification_report(y_dev, gs.predict(x_dev)))
+    print("> Matriz de confusión:\n", calculate_confusion_matrix(y_dev, gs.predict(x_dev)))
+
+
+def knn():
+    """
+    Función para implementar el algoritmo kNN.
+    Hace un barrido de hiperparametros para encontrar los parametros optimos
+
+    :param data: Conjunto de datos para realizar la clasificación.
+    :type data: pandas.DataFrame
+    :return: Tupla con la clasificación de los datos.
+    :rtype: tuple
+    """
+    # Dividimos los datos en entrenamiento y dev
+    x_train, x_dev, y_train, y_dev = divide_data()
+    
+    # Hacemos un barrido de hiperparametros
+
+    with tqdm(total=100, desc='Procesando kNN', unit='iter', leave=True) as pbar:
+        gs = GridSearchCV(KNeighborsClassifier(), args.kNN, cv=5, n_jobs=args.cpu, scoring=args.estimator)
+        start_time = time.time()
+        gs.fit(x_train, y_train)
+        end_time = time.time()
+        for i in range(100):
+            time.sleep(random.uniform(0.06, 0.15))  # Esperamos un tiempo aleatorio
+            pbar.update(random.random()*2)  # Actualizamos la barra con un valor aleatorio
+        pbar.n = 100
+        pbar.last_print_n = 100
+        pbar.update(0)
+    execution_time = end_time - start_time
+    print("Tiempo de ejecución:"+Fore.MAGENTA, execution_time,Fore.RESET+ "segundos")
+    
+    # Mostramos los resultados
+    mostrar_resultados(gs, x_dev, y_dev)
+    
+    # Guardamos el modelo utilizando pickle
+    save_model(gs)
+
+
+def decision_tree():
+    """
+    Función para implementar el algoritmo de árbol de decisión.
+
+    :param data: Conjunto de datos para realizar la clasificación.
+    :type data: pandas.DataFrame
+    :return: Tupla con la clasificación de los datos.
+    :rtype: tuple
+    """
+    # Dividimos los datos en entrenamiento y dev
+    x_train, x_dev, y_train, y_dev = divide_data()
+    
+    # Hacemos un barrido de hiperparametros
+    with tqdm(total=100, desc='Procesando decision tree', unit='iter', leave=True) as pbar:
+        #TODO Llamar al decision trees
+        #gs = GridSearchCV(
+
+        execution_time = end_time - start_time
+    print("Tiempo de ejecución:"  + execution_time + "segundos")
+    
+    # Mostramos los resultados
+    mostrar_resultados(gs, x_dev, y_dev)
+    
+    # Guardamos el modelo utilizando pickle
+    save_model(gs)
+
+
+def random_forest():
+    """
+    Función que entrena un modelo de Random Forest utilizando GridSearchCV para encontrar los mejores hiperparámetros.
+    Divide los datos en entrenamiento y desarrollo, realiza la búsqueda de hiperparámetros, guarda el modelo entrenado
+    utilizando pickle y muestra los resultados utilizando los datos de desarrollo.
+
+    Parámetros:
+        Ninguno
+
+    Retorna:
+        Ninguno
+    """
+    
+    # Dividimos los datos en entrenamiento y dev
+    x_train, x_dev, y_train, y_dev = divide_data()
+    
+    # Hacemos un barrido de hiperparametros
+    with tqdm(total=100, desc='Procesando random forest', unit='iter', leave=True) as pbar:
+        #TODO Llamar al decision trees
+        #gs = GridSearchCV(
+        execution_time = end_time - start_time
+    
+    print("Tiempo de ejecución:"+Fore.MAGENTA, execution_time,Fore.RESET+ "segundos")
+    
+    # Mostramos los resultados
+    mostrar_resultados(gs, x_dev, y_dev)
+    
+    # Guardamos el modelo utilizando pickle
+    save_model(gs)
+
+def load_model():
+    """
+    Carga el modelo desde el archivo 'output/modelo.pkl' y lo devuelve.
+
+    Returns:
+        model: El modelo cargado desde el archivo 'output/modelo.pkl'.
+
+    Raises:
+        Exception: Si ocurre un error al cargar el modelo.
+    """
+    try:
+        with open('output/modelo.pkl', 'rb') as file:
+            model = pickle.load(file)
+            print(Fore.GREEN+"Modelo cargado con éxito"+Fore.RESET)
+            return model
+    except Exception as e:
+        print(Fore.RED+"Error al cargar el modelo"+Fore.RESET)
+        print(e)
+        sys.exit(1)
+
+def predict():
+    """
+    Realiza una predicción utilizando el modelo entrenado y guarda los resultados en un archivo CSV.
+
+    Parámetros:
+        Ninguno
+
+    Retorna:
+        Ninguno
+    """
+    global data
+    # Predecimos
+    prediction = model.predict(data)
+    
+    # Añadimos la prediccion al dataframe data
+    data = pd.concat([data, pd.DataFrame(prediction, columns=[args.prediction])], axis=1)
+
+#    __  __       _       
+#   |  \/  | __ _(_)_ __  
+#   | |\/| |/ _` | | '_ \ 
+#   | |  | | (_| | | | | |
+#   |_|  |_|\__,_|_|_| |_|
+                    
 if __name__ == '__main__':
     # Configurar argumentos
     parser = argparse.ArgumentParser(description="Procesamiento de datos")
