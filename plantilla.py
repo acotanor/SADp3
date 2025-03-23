@@ -529,6 +529,7 @@ if __name__ == '__main__':
     parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar")
     parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida")
     parser.add_argument('-c','--column', type=str, help="Columna a tratar/predecir.")
+    parser.add_argument('--modelo',type=str, choices=["knn","dt","rf"], help="Modelo a entrenar/probar. (knn=KNN, dt=Decision Tree, rf=Random Forest)")
     parse.add_argument("-c", "--cpu", help="Número de CPUs a utilizar [-1 para usar todos]", required=False, default=-1, type=int)
 
     args = parser.parse_args()
@@ -565,3 +566,29 @@ if __name__ == '__main__':
     data.to_csv(args.output, index=False)
     print(f"Datos procesados guardados en {args.output}")
 
+    if args.mode=='train':
+        # Entrenamos el modelo seleccionado:
+        print(f"Entrenando el modelo {args.model}")
+        if args.modelo=="knn":
+            try:
+                knn()
+                print("Modelo KNN entrenado con éxito.")
+                sys.exit(0)
+            except Exception as e:
+                print(e)
+        elif args.modelo=="dt":
+            try:
+                decision_tree()
+                print("Modelo Decision Tree entrenado con éxito.")
+                sys.exit(0)
+            except Exception as e:
+                print(e)
+        elif args.modelo=="rf":
+            try:
+                random_forest()
+                print("Modelo Random Forest entrenado con éxito.")
+                sys.exit(0)
+            except Exception as e:
+                print(e)
+    elif args.mode=='test':
+        print("\n- Cargando el modelo")
