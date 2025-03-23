@@ -39,7 +39,7 @@ def generarJson(filename="config.json"):
         None
     """
     if not os.path.exists(filename):
-        print(f"Generando un archivo de configuración: {filename}")
+        print(f"Generando un archivo de configuración: {filename}...")
         
         config = {
             "preprocessing": {
@@ -87,8 +87,23 @@ def leerJson(file) -> dict:
         print(f"Error: {e}")
         return {}
 
-# Dado un archivo JSON, el atributo a cambiar y el valor modificado, modifica los metadatos.
 def modJson(file, atributo, valor):
+    """
+    Dado un archivo JSON, el atributo a cambiar y el valor modificado, modifica los metadatos.
+
+    Args:
+        file: El archivo .json.
+        atributo: El atributo a cambiar.
+        valor: El valor nuevo del atributo.
+    
+    Returns:
+        None
+    
+    Raises:
+        FileNotFoundError:  No existe el archivo .json especificado, devuelve un diccionario vacío.
+        JSONDecodeError:    El formato del archivo .json es incorrecto y no se puede decodificar, devuelve un diccionario vacío.
+        Exception:          Ha habido un error inesperado, devuelve un diccionario vacío. 
+    """
     try:
         data = leerJSON.leerJson(file)              # Lee el archivo JSON a modificar.
         data["preprocessing"][atributo] = valor     # Cambiamos el valor de un atributo.
@@ -283,6 +298,21 @@ def drop_features():
     features (list): Lista de nombres de columnas a eliminar.
 
     """
+
+def preprocesar_datos(text_process):
+    global data
+    numerical_feature, text_feature, categorical_feature = select_features(data)
+    
+    # Procesar valores faltantes
+    data = process_missing_values(data, numerical_feature, categorical_feature)
+    
+    # Simplificar texto
+    data = simplify_text(data, text_feature)
+    
+    # Procesar texto
+    process_text(text_feature, text_process)
+
+
 
 #    __  __           _      _           
 #   |  \/  | ___   __| | ___| | ___  ___ 
@@ -503,7 +533,22 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Carga de datos
+    # Creamos la carpeta output:
+    print("\n- Creando carpeta output...")
+    try:
+        os.makedirs('output')
+        print("Carpeta output creada con éxito.")
+    except FileExistsError:
+        print("La carpeta output ya existe.")
+    except Exception as e:
+        print("Error al crear la carpeta output.")
+        print(e)
+        sys.exit(1)
+
+    # Generamos la configuración:
+    generarJson()
+
+    # Carga de datos:
     print(f"\n- Cargando datos desde {args.data}...")
     data = load_data(args.data)
 
@@ -513,27 +558,9 @@ if __name__ == '__main__':
     nltk.download('stopwords')
     nltk.download('wordnet')
 
-    # Seleccionar características
-    numerical_feature, text_feature, categorical_feature = select_features(data)
-    
-    # Mostrar las características
-    print("Características numéricas:", numerical_feature)
-    print("Características de texto:", text_feature)
-    print("Características categóricas:", categorical_feature)
-    
-    # Procesar valores faltantes
-    data = process_missing_values(data, numerical_feature, categorical_feature)
-    
-    # Simplificar texto
-    data = simplify_text(data, text_feature)
-    
-    # Mostrar la columna de texto simplificada
-    print("Texto simplificado en la columna " + args.columna + ":")
-    print(data[args.columna].head(10))  # Mostrar las primeras 10 filas de la columna v2 simplificada
-    
-    # Procesar texto
-    process_text(text_feature, args.text_process)
-    
+    # Preprocesar datos:
+    preprocesar_datos(args.text_process)
+        
     # Guardar datos procesados en un nuevo archivo CSV
     data.to_csv(args.output, index=False)
     print(f"Datos procesados guardados en {args.output}")
