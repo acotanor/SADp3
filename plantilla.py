@@ -526,13 +526,14 @@ def predict(modelo,columna):
 if __name__ == '__main__':
     # Procesamiento de los argumentos de entrada
     parser = argparse.ArgumentParser(description="Procesamiento de datos")
-    parser.add_argument('-d','--data', type=str, required=True, help="Ruta del archivo CSV")
+    parser.add_argument('-d','--data', type=str, required=True, help="Ruta del archivo CSV", required=True)
     parser.add_argument('-m','--mode', type=str, choices=['train','test'], help="Modo de ejecución (train/test)", required=True)
-    parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar")
-    parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida")
-    parser.add_argument('-c','--column', type=str, help="Columna a tratar/predecir.")
+    parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar", required=True)
+    parser.add_argument('-s','--sampling', type=str, choices=['over','under'], help="Realizar over o under sampling a los datos en los que sea necesario.", required=True)
+    parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida", required=True)
+    parser.add_argument('-c','--column', type=str, help="Columna a predecir.")
     parser.add_argument('--modelo',type=str, choices=["knn","dt","rf"], help="Modelo a entrenar/probar. (knn=KNN, dt=Decision Tree, rf=Random Forest)")
-    parse.add_argument("-c", "--cpu", help="Número de CPUs a utilizar [-1 para usar todos]", required=False, default=-1, type=int)
+    parse.add_argument("-c", "--cpu", help="Número de CPUs a utilizar [-1 para usar todos]", default=-1, type=int)
 
     args = parser.parse_args()
 
