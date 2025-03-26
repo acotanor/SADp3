@@ -420,30 +420,22 @@ def save_model(gs):
         print("Error al guardar el modelo")
         print(e)
 
-def mostrar_resultados(gs, x_dev, y_dev):
+def mostrar_resultados(modelo, X, y_true):
     """
-    Muestra los resultados del clasificador.
-
-    Parámetros:
-    - gs: objeto GridSearchCV, el clasificador con la búsqueda de hiperparámetros.
-    - x_dev: array-like, las características del conjunto de desarrollo.
-    - y_dev: array-like, las etiquetas del conjunto de desarrollo.
-
-    Imprime en la consola los siguientes resultados:
-    - Mejores parámetros encontrados por la búsqueda de hiperparámetros.
-    - Mejor puntuación obtenida por el clasificador.
-    - F1-score micro del clasificador en el conjunto de desarrollo.
-    - F1-score macro del clasificador en el conjunto de desarrollo.
-    - Informe de clasificación del clasificador en el conjunto de desarrollo.
-    - Matriz de confusión del clasificador en el conjunto de desarrollo.
+    Muestra los resultados del modelo utilizando las etiquetas reales.
     """
+    try:
+        # Realizar predicciones
+        y_pred = modelo.predict(X)
 
-    print("> Mejores parametros:\n", gs.best_params_)
-    print("> Mejor puntuacion:\n", gs.best_score_)
-    print("> F1-score micro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[0])
-    print("> F1-score macro:\n", calculate_fscore(y_dev, gs.predict(x_dev))[1])
-    print("> Informe de clasificación:\n", classification_report(y_dev, gs.predict(x_dev)))
-    print("> Matriz de confusión:\n", confusion_matrix(y_dev, gs.predict(x_dev)))
+        # Calcular métricas
+        print("> Informe de clasificación:\n", classification_report(y_true, y_pred))
+        print("> Matriz de confusión:\n", confusion_matrix(y_true, y_pred))
+        print("> F1-score micro:", f1_score(y_true, y_pred, average='micro'))
+        print("> F1-score macro:", f1_score(y_true, y_pred, average='macro'))
+    except Exception as e:
+        print("Error al evaluar el modelo:")
+        print(e)
 
 def calculate_fscore(y_true, y_pred):
     """
@@ -469,9 +461,6 @@ def knn():
 
     # Entrenamos el modelo
     gs.fit(x_train, y_train)
-
-    # Mostramos los resultados
-    mostrar_resultados(gs, x_dev, y_dev)
     
     # Guardamos el modelo utilizando pickle
     save_model(gs)
@@ -498,9 +487,6 @@ def decision_tree():
     # Entrenamos el modelo
     print("Entrenando el modelo Decision Tree...")
     gs.fit(x_train, y_train)
-
-    # Mostramos los resultados
-    mostrar_resultados(gs, x_dev, y_dev)
 
     # Guardamos el modelo utilizando pickle
     save_model(gs)
@@ -534,9 +520,6 @@ def random_forest():
     print("Entrenando el modelo Random Forest con GridSearchCV...")
     gs.fit(x_train, y_train)
 
-    # Mostrar los resultados
-    mostrar_resultados(gs, x_dev, y_dev)
-
     # Guardar el modelo utilizando pickle
     save_model(gs)
 
@@ -561,12 +544,14 @@ def load_model():
         print(e)
         sys.exit(1)
 
-def predict(modelo):
+def predict(modelo, y_true=None):
     """
     Realiza una predicción utilizando el modelo entrenado y guarda los resultados en un archivo CSV.
+    Si se proporcionan etiquetas reales (y_true), evalúa el modelo.
 
     Parámetros:
         modelo: El modelo entrenado.
+        y_true: Las etiquetas reales (opcional).
 
     Retorna:
         Ninguno
@@ -578,6 +563,11 @@ def predict(modelo):
     # Convertir X a un array de NumPy para evitar inconsistencias
     X = X.values
 
+    # Verificar que X y y_true tienen el mismo tamaño
+    if y_true is not None and X.shape[0] != len(y_true):
+        print("Error: El número de filas en X no coincide con el número de etiquetas reales (y_true).")
+        return
+
     # Realizar predicciones
     prediction = modelo.predict(X)
 
@@ -587,6 +577,11 @@ def predict(modelo):
     # Guardar el DataFrame con las predicciones
     data.to_csv('output/data-prediction.csv', index=False)
     print("Predicciones guardadas en 'output/data-prediction.csv'")
+
+    # Evaluar el modelo si se proporcionan etiquetas reales
+    if y_true is not None:
+        print("\n> Evaluando el modelo...")
+        mostrar_resultados(modelo, X, y_true)
 
 #    __  __       _       
 #   |  \/  | __ _(_)_ __  
@@ -678,7 +673,11 @@ if __name__ == '__main__':
         print(f"\n- Cargando el modelo {args.modelo}...")
         modelo = load_model()
         try:
-            predict(modelo)
+            # Obtener las etiquetas reales
+            y_true = data[args.column].values
+
+            # Realizar predicciones y evaluar el modelo
+            predict(modelo, y_true)
             print(f"Test del modelo {args.modelo} realizado con éxito.")
             sys.exit(0)
         except Exception as e:
