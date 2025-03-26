@@ -1,10 +1,6 @@
-# Tareas:
-- Implementar las funciones necesarias:
-    - (x) **leerJson**
-    - (x) **modJson**
-    - ( ) **over_under_sampling()**
-    - ( ) **knn, decisiontree, randomforest**
-    - ( ) **funciones para utilizar los modelos**
-    - ( ) **menu**
+# Requisitos de uso:
+Para instalar los requirements hay que utilizar pip desde un entorno de conda (.venv nos dá problemas con pandas).
 
-- ( ) Añadir las funciones sueltas a la plantilla.
+## Comandos:
+1. conda install pip
+2. pip -r install requirements.txt
