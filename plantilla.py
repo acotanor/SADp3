@@ -595,23 +595,30 @@ def predict(modelo):
 #   |_|  |_|\__,_|_|_| |_|
                     
 if __name__ == '__main__':
-    # Procesamiento de los argumentos de entrada
-    parser = argparse.ArgumentParser(description="Procesamiento de datos")
-    parser.add_argument('-d','--data', type=str, help="Ruta del archivo CSV", required=True)
-    parser.add_argument('-m','--mode', type=str, choices=['train','test'], help="Modo de ejecución (train/test)", required=True)
-    parser.add_argument('--text_process', type=str, choices=['tf-idf', 'bow'], help="Técnica de procesamiento de texto a utilizar", required=True)
-    parser.add_argument('-s','--sampling', type=str, choices=['over','under'], help="Realizar over o under sampling a los datos en los que sea necesario.", required=True)
-    parser.add_argument('-o','--output', type=str, help="Ruta del archivo CSV de salida", required=True)
-    parser.add_argument('-c','--column', type=str, help="Columna a predecir.")
-    parser.add_argument('--modelo', type=str, choices=["knn","dt","rf"], help="Modelo a entrenar/probar. (knn=KNN, dt=Decision Tree, rf=Random Forest)")
-    parser.add_argument("--cpu", help="Número de CPUs a utilizar (-1 para usar todos)", default=-1, type=int)
-    parser.add_argument("--test", type=float, default=0.25,help="La proporción datos de entrenamiento / datos de test.")
+    # Cargar configuración desde config.json
+    config_file = "config.json"
+    config = leerJson(config_file)
 
-    args = parser.parse_args()
+    if not config:
+        print("Error: No se pudo cargar la configuración desde config.json.")
+        sys.exit(1)
+
+    # Asignar valores desde el archivo JSON
+    args = argparse.Namespace(
+        data=config.get("data"),
+        mode=config.get("mode"),
+        text_process=config.get("text_process"),
+        sampling=config.get("sampling"),
+        output=config.get("output"),
+        column=config.get("column"),
+        modelo=config.get("modelo"),
+        cpu=config.get("cpu", -1),
+        test=config.get("test", 0.25)
+    )
 
     np.random.seed(1)  # Utilizamos una semilla para poder reproducir los resultados.
 
-    # Creamos la carpeta output:
+    # Crear la carpeta output si no existe
     print("\n- Creando carpeta output...")
     try:
         os.makedirs('output')
@@ -623,53 +630,51 @@ if __name__ == '__main__':
         print(e)
         sys.exit(1)
 
-    # Generamos la configuración:
+    # Generar configuración si no existe
     generarJson()
 
-    # Carga de datos:
+    # Cargar datos
     print(f"\n- Cargando datos desde {args.data}...")
     data = load_data(args.data)
 
-    # Descargamos recursos necesarios de NLTK
+    # Descargar recursos necesarios de NLTK
     print("\n- Descargando diccionarios...")
     nltk.download('punkt')
     nltk.download('stopwords')
     nltk.download('wordnet')
 
-    nltk.download('punkt_tab')
-
-    # Preprocesar datos:
+    # Preprocesar datos
     preprocesar_datos(args.text_process)
-        
+
     # Guardar datos procesados en un nuevo archivo CSV
     data.to_csv(args.output, index=False)
     print(f"Datos procesados guardados en {args.output}")
 
-    if args.mode=='train':
-        # Entrenamos el modelo seleccionado:
+    if args.mode == 'train':
+        # Entrenar el modelo seleccionado
         print(f"Entrenando el modelo {args.modelo}...")
-        if args.modelo=="knn":
+        if args.modelo == "knn":
             try:
                 knn()
                 print("Modelo KNN entrenado con éxito.")
                 sys.exit(0)
             except Exception as e:
                 print(e)
-        elif args.modelo=="dt":
+        elif args.modelo == "dt":
             try:
                 decision_tree()
                 print("Modelo Decision Tree entrenado con éxito.")
                 sys.exit(0)
             except Exception as e:
                 print(e)
-        elif args.modelo=="rf":
+        elif args.modelo == "rf":
             try:
                 random_forest()
                 print("Modelo Random Forest entrenado con éxito.")
                 sys.exit(0)
             except Exception as e:
                 print(e)
-    elif args.mode=='test':
+    elif args.mode == 'test':
         print(f"\n- Cargando el modelo {args.modelo}...")
         modelo = load_model()
         try:
@@ -679,5 +684,3 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             sys.exit(1)
-
-
