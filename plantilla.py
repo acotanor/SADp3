@@ -604,9 +604,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Asignar valores desde el archivo JSON
-    args = argparse.Namespace(
+    jsonArgs = argparse.Namespace(
         data=config.get("data"),
-        mode=config.get("mode"),
         text_process=config.get("text_process"),
         sampling=config.get("sampling"),
         output=config.get("output"),
@@ -615,6 +614,11 @@ if __name__ == '__main__':
         cpu=config.get("cpu", -1),
         test=config.get("test", 0.25)
     )
+    
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("-m","--mode", type=str, choices=['train','test'], help="Modo de ejecución (train/test)", required=True)
+
+    args = parser.parse_args(namespace=jsonArgs)
 
     np.random.seed(1)  # Utilizamos una semilla para poder reproducir los resultados.
 
