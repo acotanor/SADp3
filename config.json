@@ -1,11 +1,13 @@
 {
-    "data": "iris.csv",
+    "data": "brain_stroke_con_ruido_train.csv",
     "mode": "test",
     "text_process": "tf_idf",
     "sampling": "undersampling",
-    "output": "iris2.csv",
-    "column": "Especie",
-    "modelo": "knn",
+    "output": "stroke2.csv",
+    "column": "stroke",
+    "modelo": "dt",
     "cpu": -1,
-    "test": 0.25
+    "test": 0.25,
+    "criterion": "entropy",
+    "random_state": 42
 }

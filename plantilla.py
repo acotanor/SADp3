@@ -388,7 +388,9 @@ def divide_data():
     y = label_encoder.fit_transform(y)
 
     # Dividir los datos en entrenamiento y desarrollo
-    x_train, x_dev, y_train, y_dev = train_test_split(X, y, test_size=0.2, random_state=42)
+    x_train, x_dev, y_train, y_dev = train_test_split(
+        X, y, test_size=0.2, random_state=args.random_state  # Usar random_state desde el JSON
+    )
 
     # Convertir X a arrays de NumPy para evitar problemas con nombres de columnas
     x_train = x_train.values
@@ -475,14 +477,19 @@ def decision_tree():
 
     # Configuramos el barrido de hiperparámetros
     param_grid = {
-        "criterion": ["gini", "entropy"],  # Función para medir la calidad de la división
+        "criterion": [args.criterion],  # Usar el criterio desde el JSON
         "max_depth": [None, 5, 10, 15, 20],  # Profundidad máxima del árbol
         "min_samples_split": [2, 5, 10],  # Mínimo número de muestras para dividir un nodo
         "min_samples_leaf": [1, 2, 4]  # Mínimo número de muestras en una hoja
     }
 
     # Configuramos GridSearchCV
-    gs = GridSearchCV(DecisionTreeClassifier(random_state=42), param_grid, n_jobs=args.cpu, cv=5)
+    gs = GridSearchCV(
+        DecisionTreeClassifier(random_state=args.random_state),  # Usar random_state desde el JSON
+        param_grid,
+        n_jobs=args.cpu,
+        cv=5
+    )
 
     # Entrenamos el modelo
     print("Entrenando el modelo Decision Tree...")
@@ -510,7 +517,7 @@ def random_forest():
 
     # Configurar GridSearchCV
     gs = GridSearchCV(
-        estimator=RandomForestClassifier(random_state=42),
+        estimator=RandomForestClassifier(random_state=args.random_state),  # Usar random_state desde el JSON
         param_grid=param_grid,
         cv=5,  # Validación cruzada con 5 particiones
         n_jobs=args.cpu,  # Número de CPUs a utilizar
@@ -607,7 +614,9 @@ if __name__ == '__main__':
         column=config.get("column"),
         modelo=config.get("modelo"),
         cpu=config.get("cpu", -1),
-        test=config.get("test", 0.25)
+        test=config.get("test", 0.25),
+        criterion=config.get("criterion", "gini"),  # Valor por defecto: "gini"
+        random_state=config.get("random_state", 42)  # Valor por defecto: 42
     )
     
     parser = argparse.ArgumentParser(description="")
@@ -615,7 +624,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args(namespace=jsonArgs)
 
-    np.random.seed(1)  # Utilizamos una semilla para poder reproducir los resultados.
+    np.random.seed(args.random_state)  # Utilizamos la semilla desde el JSON para reproducibilidad.
 
     # Crear la carpeta output si no existe
     print("\n- Creando carpeta output...")
