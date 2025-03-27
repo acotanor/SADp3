@@ -316,26 +316,70 @@ def process_text(text_feature, text_process):
 
 def over_under_sampling():
     """
-    Realiza oversampling o undersampling en los datos según la estrategia especificada en args.sampling
+    Realiza oversampling o undersampling en los datos según la estrategia especificada en args.sampling.
+
     Args:
         None
-    
+
     Returns:
         None
-    
-    Raises:
-        Exception: Si ocurre algún error al realizar el oversampling o undersampling.
     """
+    global data  # Declarar 'data' como global al inicio de la función
+    try:
+        # Separar características y etiquetas
+        X = data.drop(columns=[args.column])
+        y = data[args.column]
 
+        # Realizar undersampling
+        if args.sampling == "undersampling":
+            print("Realizando undersampling...")
+            rus = RandomUnderSampler(random_state=args.random_state)
+            X_resampled, y_resampled = rus.fit_resample(X, y)
+
+        # Realizar oversampling
+        elif args.sampling == "oversampling":
+            print("Realizando oversampling...")
+            ros = RandomOverSampler(random_state=args.random_state)
+            X_resampled, y_resampled = ros.fit_resample(X, y)
+
+        else:
+            print(f"Estrategia de sampling '{args.sampling}' no reconocida. No se aplicará sampling.")
+            return
+
+        # Reconstruir el DataFrame con los datos resampleados
+        data_resampled = pd.concat([pd.DataFrame(X_resampled, columns=X.columns), pd.Series(y_resampled, name=args.column)], axis=1)
+        data = data_resampled  # Actualizar la variable global 'data'
+        print(f"Sampling completado. Nuevas dimensiones del DataFrame: {data.shape}")
+
+    except Exception as e:
+        print("Error al realizar el sampling:")
+        print(e)
+        sys.exit(1)
 
 def drop_features():
     """
-    Elimina las columnas especificadas del conjunto de datos.
+    Elimina las columnas especificadas en args.drop_features del conjunto de datos.
 
-    Parámetros:
-    features (list): Lista de nombres de columnas a eliminar.
+    Args:
+        None
 
+    Returns:
+        None
     """
+    global data
+    try:
+        # Verificar si las columnas existen en el DataFrame
+        missing_features = [feature for feature in args.drop_features if feature not in data.columns]
+        if missing_features:
+            print(f"Advertencia: Las siguientes columnas no existen en el DataFrame y no se eliminarán: {missing_features}")
+
+        # Eliminar las columnas especificadas
+        data.drop(columns=args.drop_features, inplace=True, errors='ignore')
+        print(f"Columnas eliminadas: {args.drop_features}")
+    except Exception as e:
+        print("Error al eliminar las columnas:")
+        print(e)
+        sys.exit(1)
 
 def preprocesar_datos(text_process):
     global data
@@ -616,7 +660,9 @@ if __name__ == '__main__':
         cpu=config.get("cpu", -1),
         test=config.get("test", 0.25),
         criterion=config.get("criterion", "gini"),  # Valor por defecto: "gini"
-        random_state=config.get("random_state", 42)  # Valor por defecto: 42
+        random_state=config.get("random_state", 42), # Valor por defecto: 42
+        drop_features=config.get("drop_features", [])  # Valor por defecto: lista vacía
+
     )
     
     parser = argparse.ArgumentParser(description="")
@@ -653,6 +699,13 @@ if __name__ == '__main__':
 
     # Preprocesar datos
     preprocesar_datos(args.text_process)
+
+    # Eliminar columnas no deseadas
+    if args.drop_features:
+        drop_features()
+
+    # Aplicar oversampling o undersampling
+    over_under_sampling()
 
     # Guardar datos procesados en un nuevo archivo CSV
     data.to_csv(args.output, index=False)

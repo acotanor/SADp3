@@ -2,12 +2,13 @@
     "data": "brain_stroke_con_ruido_train.csv",
     "mode": "test",
     "text_process": "tf_idf",
-    "sampling": "undersampling",
+    "sampling": "oversampling",
     "output": "stroke2.csv",
     "column": "stroke",
     "modelo": "dt",
     "cpu": -1,
     "test": 0.25,
     "criterion": "entropy",
+    "drop_features": [], 
     "random_state": 42
 }
